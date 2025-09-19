@@ -1,0 +1,309 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Password Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8 text-blue-600">Password Manager</h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Password Generator Section -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-blue-600">Password Generator</h2>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Password Length</label>
+                    <input type="number" id="passwordLength" value="12" min="8" max="32" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+                
+                <div class="mb-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="useUppercase" checked class="mr-2">
+                        <span class="text-gray-700">Include Uppercase Letters</span>
+                    </label>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="useDigits" checked class="mr-2">
+                        <span class="text-gray-700">Include Digits</span>
+                    </label>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="useSpecial" checked class="mr-2">
+                        <span class="text-gray-700">Include Special Characters</span>
+                    </label>
+                </div>
+                
+                <button id="generatePassword" 
+                        class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition">
+                    Generate Password
+                </button>
+                
+                <div class="mt-6">
+                    <label class="block text-gray-700 mb-2">Generated Password</label>
+                    <div class="flex items-center">
+                        <input type="text" id="generatedPassword" readonly 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                        <button id="copyPassword" class="ml-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Password Manager Section -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4 text-blue-600">Password Manager</h2>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Encryption Password (optional)</label>
+                    <input type="password" id="encryptionPassword" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md" 
+                           placeholder="Leave empty for no encryption">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <button id="savePasswords" 
+                            class="bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700 transition">
+                        Save to CSV
+                    </button>
+                    <button id="loadPasswords" 
+                            class="bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition">
+                        Load from CSV
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 mb-2">Filename</label>
+                    <input type="text" id="filename" value="passwords.csv" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                </div>
+                
+                <div class="mt-6">
+                    <h3 class="text-lg font-semibold mb-2">Password Entries</h3>
+                    <div id="passwordEntries" class="space-y-4">
+                        <!-- Password entries will be added here -->
+                    </div>
+                    <button id="addEntry" class="mt-4 w-full bg-gray-200 py-2 rounded-md hover:bg-gray-300">
+                        <i class="fas fa-plus mr-2"></i>Add Entry
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const generateBtn = document.getElementById('generatePassword');
+            const copyBtn = document.getElementById('copyPassword');
+            const saveBtn = document.getElementById('savePasswords');
+            const loadBtn = document.getElementById('loadPasswords');
+            const addEntryBtn = document.getElementById('addEntry');
+            const passwordEntries = document.getElementById('passwordEntries');
+            
+            // Add initial entry
+            addPasswordEntry();
+            
+            // Generate password
+            generateBtn.addEventListener('click', async function() {
+                const length = document.getElementById('passwordLength').value;
+                const useUppercase = document.getElementById('useUppercase').checked;
+                const useDigits = document.getElementById('useDigits').checked;
+                const useSpecial = document.getElementById('useSpecial').checked;
+                
+                const response = await fetch('/generate_password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        length: parseInt(length),
+                        use_upper: useUppercase,
+                        use_digits: useDigits,
+                        use_special: useSpecial
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('generatedPassword').value = data.password;
+            });
+            
+            // Copy password to clipboard
+            copyBtn.addEventListener('click', function() {
+                const passwordField = document.getElementById('generatedPassword');
+                passwordField.select();
+                document.execCommand('copy');
+                alert('Password copied to clipboard!');
+            });
+            
+            // Save passwords to CSV
+            saveBtn.addEventListener('click', async function() {
+                const encryptionPassword = document.getElementById('encryptionPassword').value;
+                const filename = document.getElementById('filename').value;
+                
+                const passwords = collectPasswords();
+                
+                const response = await fetch('/save_passwords', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        passwords: passwords,
+                        filename: filename,
+                        encryption_password: encryptionPassword || null
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('Passwords saved successfully!');
+                    // Offer download
+                    window.location.href = `/download_csv/${data.filename}`;
+                } else {
+                    alert('Error saving passwords: ' + data.error);
+                }
+            });
+            
+            // Load passwords from CSV
+            loadBtn.addEventListener('click', async function() {
+                const encryptionPassword = document.getElementById('encryptionPassword').value;
+                const filename = document.getElementById('filename').value;
+                
+                const response = await fetch('/load_passwords', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        filename: filename,
+                        decryption_password: encryptionPassword || null
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    // Clear existing entries
+                    passwordEntries.innerHTML = '';
+                    
+                    // Add loaded entries
+                    data.passwords.forEach(entry => {
+                        addPasswordEntry(entry.website, entry.username, entry.password, entry.notes);
+                    });
+                    
+                    alert('Passwords loaded successfully!');
+                } else {
+                    alert('Error loading passwords: ' + data.error);
+                }
+            });
+            
+            // Add new password entry
+            addEntryBtn.addEventListener('click', function() {
+                addPasswordEntry();
+            });
+            
+            // Function to add a password entry form
+            function addPasswordEntry(website = '', username = '', password = '', notes = '') {
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'password-entry border border-gray-200 p-4 rounded-md';
+                entryDiv.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-gray-700 mb-1 text-sm">Website/Service</label>
+                            <input type="text" class="website w-full px-3 py-2 border border-gray-300 rounded-md" value="${website}">
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-1 text-sm">Username/Email</label>
+                            <input type="text" class="username w-full px-3 py-2 border border-gray-300 rounded-md" value="${username}">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-gray-700 mb-1 text-sm">Password</label>
+                            <div class="flex items-center">
+                                <input type="password" class="password w-full px-3 py-2 border border-gray-300 rounded-md" value="${password}">
+                                <button type="button" class="toggle-password ml-2 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button type="button" class="use-generated ml-1 p-2 bg-gray-200 rounded-md hover:bg-gray-300">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-1 text-sm">Notes</label>
+                            <input type="text" class="notes w-full px-3 py-2 border border-gray-300 rounded-md" value="${notes}">
+                        </div>
+                    </div>
+                    <button type="button" class="remove-entry bg-red-100 text-red-600 py-1 px-3 rounded-md text-sm hover:bg-red-200">
+                        Remove
+                    </button>
+                `;
+                
+                passwordEntries.appendChild(entryDiv);
+                
+                // Add event listeners for the new entry
+                const toggleBtn = entryDiv.querySelector('.toggle-password');
+                const passwordInput = entryDiv.querySelector('.password');
+                const useGeneratedBtn = entryDiv.querySelector('.use-generated');
+                const removeBtn = entryDiv.querySelector('.remove-entry');
+                
+                toggleBtn.addEventListener('click', function() {
+                    if (passwordInput.type === 'password') {
+                        passwordInput.type = 'text';
+                        toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+                    } else {
+                        passwordInput.type = 'password';
+                        toggleBtn.innerHTML = '<i class="fas fa-eye"></i>';
+                    }
+                });
+                
+                useGeneratedBtn.addEventListener('click', function() {
+                    const generatedPassword = document.getElementById('generatedPassword').value;
+                    if (generatedPassword) {
+                        passwordInput.value = generatedPassword;
+                    } else {
+                        alert('Please generate a password first!');
+                    }
+                });
+                
+                removeBtn.addEventListener('click', function() {
+                    if (passwordEntries.children.length > 1) {
+                        passwordEntries.removeChild(entryDiv);
+                    } else {
+                        alert('You need at least one password entry.');
+                    }
+                });
+            }
+            
+            // Function to collect all password entries
+            function collectPasswords() {
+                const entries = [];
+                const entryElements = document.querySelectorAll('.password-entry');
+                
+                entryElements.forEach(entry => {
+                    entries.push({
+                        website: entry.querySelector('.website').value,
+                        username: entry.querySelector('.username').value,
+                        password: entry.querySelector('.password').value,
+                        notes: entry.querySelector('.notes').value
+                    });
+                });
+                
+                return entries;
+            }
+        });
+    </script>
+</body>
+</html>
